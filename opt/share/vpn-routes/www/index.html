@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN Routes Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155',
+                            text: '#e2e8f0',
+                            muted: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .loading { opacity: 0.6; pointer-events: none; }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-dark-bg text-dark-text min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <!-- Header -->
+        <header class="flex items-center justify-between mb-8">
+            <h1 class="text-2xl font-bold flex items-center gap-3">
+                <span class="text-3xl">🛡️</span>
+                VPN Routes
+            </h1>
+            <button onclick="loadStatus()" class="p-2 hover:bg-dark-card rounded-lg transition" title="Обновить">
+                <svg id="refreshIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Status Cards -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="bg-dark-card rounded-xl p-4 border border-dark-border">
+                <div class="text-dark-muted text-sm mb-1">Статус</div>
+                <div id="statusIndicator" class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-gray-500"></span>
+                    <span class="font-semibold">Загрузка...</span>
+                </div>
+            </div>
+            <div class="bg-dark-card rounded-xl p-4 border border-dark-border">
+                <div class="text-dark-muted text-sm mb-1">Маршруты</div>
+                <div id="routesCount" class="text-2xl font-bold">-</div>
+            </div>
+            <div class="bg-dark-card rounded-xl p-4 border border-dark-border">
+                <div class="text-dark-muted text-sm mb-1">Обновлено</div>
+                <div id="lastUpdate" class="font-semibold">-</div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3 mb-6">
+            <button onclick="restart()" id="btnRestart" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Перезапустить
+            </button>
+            <button onclick="stop()" id="btnStop" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-xl transition flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                </svg>
+                Стоп
+            </button>
+            <a href="/logs.html" class="bg-dark-card hover:bg-dark-border text-white font-semibold py-3 px-4 rounded-xl transition border border-dark-border flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                Логи
+            </a>
+        </div>
+
+        <!-- Logs Widget -->
+        <div class="bg-dark-card rounded-xl border border-dark-border mb-6">
+            <div class="flex items-center justify-between p-4 border-b border-dark-border">
+                <div class="flex items-center gap-3">
+                    <h2 class="font-semibold">Логи</h2>
+                    <span id="logsErrorBadge" class="hidden text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">0 ошибок</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="loadLogsWidget()" class="text-dark-muted hover:text-white transition p-1" title="Обновить">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </button>
+                    <a href="/logs.html" class="text-blue-400 hover:text-blue-300 text-sm">Все логи →</a>
+                </div>
+            </div>
+            <div id="logsContent" class="p-4 font-mono text-xs max-h-48 overflow-y-auto bg-black/20">
+                <div class="text-dark-muted">Загрузка логов...</div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="bg-dark-card rounded-xl border border-dark-border mb-6">
+            <div class="p-4 border-b border-dark-border">
+                <h2 class="font-semibold">Настройки</h2>
+            </div>
+            <div class="p-4 space-y-4">
+                <div>
+                    <label class="block text-dark-muted text-sm mb-2">URL списка маршрутов</label>
+                    <input type="text" id="inputUrl" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 transition">
+                </div>
+                <div>
+                    <label class="block text-dark-muted text-sm mb-2">VPN интерфейс</label>
+                    <select id="selectInterface" class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 transition">
+                        <option value="">Загрузка...</option>
+                    </select>
+                </div>
+                <button onclick="saveConfig()" id="btnSave" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Сохранить
+                </button>
+            </div>
+        </div>
+
+        <!-- Routes List -->
+        <div class="bg-dark-card rounded-xl border border-dark-border">
+            <div class="flex items-center justify-between p-4 border-b border-dark-border">
+                <h2 class="font-semibold">Маршруты <span id="routesTotal" class="text-dark-muted font-normal">(0)</span></h2>
+                <div class="flex items-center gap-3">
+                    <input type="text" id="searchRoutes" placeholder="Поиск..." class="bg-dark-bg border border-dark-border rounded-lg px-3 py-1 text-sm focus:outline-none focus:border-blue-500 transition w-40" onkeyup="searchRoutes()">
+                    <button onclick="clearRoutes()" id="btnClearRoutes" class="text-sm px-3 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded-lg transition flex items-center gap-2" title="Очистить ipset и кэш маршрутов">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Очистить
+                    </button>
+                </div>
+            </div>
+            <div id="routesList" class="p-4 font-mono text-sm max-h-80 overflow-y-auto">
+                <div class="text-dark-muted">Загрузка маршрутов...</div>
+            </div>
+            <!-- Pagination -->
+            <div id="pagination" class="flex items-center justify-between p-4 border-t border-dark-border">
+                <button onclick="prevPage()" id="btnPrev" class="px-3 py-1 bg-dark-bg border border-dark-border rounded-lg hover:bg-dark-border transition disabled:opacity-50" disabled>
+                    ← Пред
+                </button>
+                <span id="pageInfo" class="text-dark-muted text-sm">Страница 1 из 1</span>
+                <button onclick="nextPage()" id="btnNext" class="px-3 py-1 bg-dark-bg border border-dark-border rounded-lg hover:bg-dark-border transition disabled:opacity-50" disabled>
+                    След →
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-8 text-center text-dark-muted text-sm">
+            VPN Routes Dashboard v1.0 | Keenetic
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-dark-card border border-dark-border rounded-xl px-4 py-3 shadow-lg transform translate-y-20 opacity-0 transition-all duration-300">
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        // State
+        let currentPage = 1;
+        let totalPages = 1;
+        let searchTimeout = null;
+
+        // Toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMessage');
+            toastMsg.textContent = message;
+            toast.className = toast.className.replace(/translate-y-20 opacity-0/, 'translate-y-0 opacity-100');
+            if (type === 'error') {
+                toast.style.borderColor = '#ef4444';
+            } else if (type === 'success') {
+                toast.style.borderColor = '#22c55e';
+            } else {
+                toast.style.borderColor = '#334155';
+            }
+            setTimeout(() => {
+                toast.className = toast.className.replace(/translate-y-0 opacity-100/, 'translate-y-20 opacity-0');
+            }, 3000);
+        }
+
+        // API calls
+        async function api(endpoint, method = 'GET', body = null) {
+            const options = { method };
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            const response = await fetch(`/api/${endpoint}`, options);
+            return response.json();
+        }
+
+        // Load status
+        async function loadStatus() {
+            const icon = document.getElementById('refreshIcon');
+            icon.classList.add('spinner');
+            try {
+                const data = await api('status.cgi');
+
+                // Update status indicator
+                const indicator = document.getElementById('statusIndicator');
+                if (data.status === 'active') {
+                    indicator.innerHTML = '<span class="w-3 h-3 rounded-full bg-green-500 animate-pulse"></span><span class="font-semibold text-green-400">Активен</span>';
+                } else {
+                    indicator.innerHTML = '<span class="w-3 h-3 rounded-full bg-red-500"></span><span class="font-semibold text-red-400">Остановлен</span>';
+                }
+
+                // Update counts
+                document.getElementById('routesCount').textContent = data.ipset_count || 0;
+
+                // Update last update time
+                if (data.last_update) {
+                    const time = data.last_update.split(' ')[1] || data.last_update;
+                    document.getElementById('lastUpdate').textContent = time;
+                } else {
+                    document.getElementById('lastUpdate').textContent = '-';
+                }
+            } catch (e) {
+                showToast('Ошибка загрузки статуса', 'error');
+            }
+            icon.classList.remove('spinner');
+        }
+
+        // Load config
+        async function loadConfig() {
+            try {
+                const data = await api('config.cgi');
+                document.getElementById('inputUrl').value = data.routes_url || '';
+
+                // Load interfaces and set current
+                const interfaces = await api('interfaces.cgi');
+                const select = document.getElementById('selectInterface');
+                select.innerHTML = '';
+                interfaces.interfaces.forEach(iface => {
+                    const option = document.createElement('option');
+                    option.value = iface.name;
+                    option.textContent = `${iface.name} (${iface.ip}) ${iface.up ? '●' : '○'}`;
+                    if (iface.name === data.vpn_interface) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+            } catch (e) {
+                showToast('Ошибка загрузки конфигурации', 'error');
+            }
+        }
+
+        // Save config
+        async function saveConfig() {
+            const btn = document.getElementById('btnSave');
+            btn.classList.add('loading');
+            try {
+                const data = {
+                    routes_url: document.getElementById('inputUrl').value,
+                    vpn_interface: document.getElementById('selectInterface').value
+                };
+                const result = await api('config.cgi', 'POST', data);
+                if (result.success) {
+                    showToast('Настройки сохранены', 'success');
+                } else {
+                    showToast(result.error || 'Ошибка сохранения', 'error');
+                }
+            } catch (e) {
+                showToast('Ошибка сохранения', 'error');
+            }
+            btn.classList.remove('loading');
+        }
+
+        // Restart
+        async function restart() {
+            const btn = document.getElementById('btnRestart');
+            btn.classList.add('loading');
+            btn.innerHTML = '<svg class="w-5 h-5 spinner" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Перезапуск...';
+            try {
+                const result = await api('restart.cgi', 'POST');
+                if (result.success) {
+                    showToast('Перезапущено успешно', 'success');
+                    setTimeout(() => {
+                        loadStatus();
+                        loadRoutes();
+                    }, 1000);
+                } else {
+                    showToast(result.error || 'Ошибка перезапуска', 'error');
+                }
+            } catch (e) {
+                showToast('Ошибка перезапуска', 'error');
+            }
+            btn.classList.remove('loading');
+            btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Перезапустить';
+        }
+
+        // Stop
+        async function stop() {
+            const btn = document.getElementById('btnStop');
+            btn.classList.add('loading');
+            try {
+                const result = await api('stop.cgi', 'POST');
+                if (result.success) {
+                    showToast('Остановлено', 'success');
+                    setTimeout(loadStatus, 500);
+                } else {
+                    showToast(result.error || 'Ошибка остановки', 'error');
+                }
+            } catch (e) {
+                showToast('Ошибка остановки', 'error');
+            }
+            btn.classList.remove('loading');
+        }
+
+        // Clear routes
+        async function clearRoutes() {
+            if (!confirm('Очистить все маршруты и кэш? После этого потребуется перезапуск для загрузки новых маршрутов.')) {
+                return;
+            }
+            const btn = document.getElementById('btnClearRoutes');
+            btn.classList.add('loading');
+            try {
+                const result = await api('routes-clear.cgi', 'POST');
+                if (result.success) {
+                    showToast('Маршруты очищены', 'success');
+                    setTimeout(() => {
+                        loadStatus();
+                        loadRoutes();
+                    }, 500);
+                } else {
+                    showToast(result.error || 'Ошибка очистки', 'error');
+                }
+            } catch (e) {
+                showToast('Ошибка очистки маршрутов', 'error');
+            }
+            btn.classList.remove('loading');
+        }
+
+        // Load routes with pagination
+        async function loadRoutes(page = 1, search = '') {
+            currentPage = page;
+            try {
+                let url = `routes.cgi?page=${page}&per_page=50`;
+                if (search) {
+                    url += `&search=${encodeURIComponent(search)}`;
+                }
+                const data = await api(url);
+
+                document.getElementById('routesTotal').textContent = `(${data.total})`;
+                totalPages = data.pages;
+
+                const list = document.getElementById('routesList');
+                if (data.routes.length === 0) {
+                    list.innerHTML = '<div class="text-dark-muted">Нет маршрутов</div>';
+                } else {
+                    list.innerHTML = data.routes.map(r => `<div class="py-1 border-b border-dark-border/30 last:border-0">${r}</div>`).join('');
+                }
+
+                // Update pagination
+                document.getElementById('pageInfo').textContent = `Страница ${data.page} из ${data.pages}`;
+                document.getElementById('btnPrev').disabled = data.page <= 1;
+                document.getElementById('btnNext').disabled = data.page >= data.pages;
+            } catch (e) {
+                showToast('Ошибка загрузки маршрутов', 'error');
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                loadRoutes(currentPage - 1, document.getElementById('searchRoutes').value);
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                loadRoutes(currentPage + 1, document.getElementById('searchRoutes').value);
+            }
+        }
+
+        function searchRoutes() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadRoutes(1, document.getElementById('searchRoutes').value);
+            }, 300);
+        }
+
+        // Load logs widget (last 10 entries)
+        async function loadLogsWidget() {
+            try {
+                const data = await api('logs.cgi?per_page=10');
+                const content = document.getElementById('logsContent');
+                const badge = document.getElementById('logsErrorBadge');
+
+                // Show error badge if there are errors
+                if (data.error_count > 0) {
+                    badge.textContent = `${data.error_count} ${data.error_count === 1 ? 'ошибка' : 'ошибок'}`;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+
+                if (data.lines.length === 0) {
+                    content.innerHTML = '<div class="text-dark-muted">Логи пусты</div>';
+                } else {
+                    content.innerHTML = data.lines.map(line => {
+                        let color = 'text-dark-text';
+                        if (line.level === 'ERROR') color = 'text-red-400';
+                        else if (line.level === 'WARN') color = 'text-yellow-400';
+                        else if (line.level === 'INFO') color = 'text-blue-400';
+                        else if (line.level === 'DEBUG') color = 'text-dark-muted';
+                        const msg = line.message.length > 80 ? line.message.substring(0, 80) + '...' : line.message;
+                        return `<div class="${color} py-0.5"><span class="text-dark-muted">${line.time}</span> [${line.level}] ${msg}</div>`;
+                    }).join('');
+                    content.scrollTop = content.scrollHeight;
+                }
+            } catch (e) {
+                // Silent fail for widget
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+            loadConfig();
+            loadRoutes();
+            loadLogsWidget();
+
+            // Auto-refresh status and logs every 30 seconds
+            setInterval(() => {
+                loadStatus();
+                loadLogsWidget();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>

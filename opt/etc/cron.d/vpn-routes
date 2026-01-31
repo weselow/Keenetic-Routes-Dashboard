@@ -1,0 +1,4 @@
+# VPN Routes - Cron задание
+# Обновление маршрутов каждый день в 04:00
+
+0 4 * * * root /opt/bin/vpn-routes.sh update >> /opt/var/log/vpn-routes.log 2>&1

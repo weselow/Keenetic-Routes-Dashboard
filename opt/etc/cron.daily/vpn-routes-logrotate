@@ -1,0 +1,29 @@
+#!/bin/sh
+# VPN Routes - Ротация логов
+# Удаляет логи старше LOG_RETENTION_DAYS дней
+
+# Загрузка конфигурации
+CONFIG_FILE="/opt/etc/vpn-routes/config.sh"
+if [ -f "$CONFIG_FILE" ]; then
+    . "$CONFIG_FILE"
+fi
+
+LOG_DIR="${LOG_DIR:-/opt/var/log/vpn-routes}"
+LOG_RETENTION_DAYS="${LOG_RETENTION_DAYS:-7}"
+
+# Проверка существования директории
+if [ ! -d "$LOG_DIR" ]; then
+    exit 0
+fi
+
+# Удаление логов старше N дней
+find "$LOG_DIR" -name "vpn-routes.*.log" -type f -mtime +$LOG_RETENTION_DAYS -delete 2>/dev/null
+
+# Создание симлинка на текущий день (для совместимости)
+TODAY=$(date '+%Y-%m-%d')
+TODAY_LOG="$LOG_DIR/vpn-routes.$TODAY.log"
+CURRENT_LINK="$LOG_DIR/vpn-routes.log"
+
+if [ -f "$TODAY_LOG" ]; then
+    ln -sf "$TODAY_LOG" "$CURRENT_LINK"
+fi

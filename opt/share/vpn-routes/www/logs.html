@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Логи - VPN Routes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155',
+                            text: '#e2e8f0',
+                            muted: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .loading { opacity: 0.6; pointer-events: none; }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .log-line { font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; }
+    </style>
+</head>
+<body class="bg-dark-bg text-dark-text min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-5xl">
+        <!-- Header -->
+        <header class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-4">
+                <a href="/" class="p-2 hover:bg-dark-card rounded-lg transition" title="Назад">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold flex items-center gap-3">
+                    <span class="text-3xl">📋</span>
+                    Логи
+                </h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="flex items-center gap-2 text-sm text-dark-muted cursor-pointer">
+                    <input type="checkbox" id="autoRefresh" class="rounded bg-dark-bg border-dark-border">
+                    <span>Автообновление</span>
+                </label>
+            </div>
+        </header>
+
+        <!-- Filters -->
+        <div class="bg-dark-card rounded-xl border border-dark-border p-4 mb-6">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div>
+                    <label class="block text-dark-muted text-sm mb-2">Дата</label>
+                    <select id="selectDate" class="bg-dark-bg border border-dark-border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 transition min-w-[150px]">
+                        <option value="">Загрузка...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-dark-muted text-sm mb-2">Уровень</label>
+                    <select id="selectLevel" class="bg-dark-bg border border-dark-border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 transition">
+                        <option value="all">Все</option>
+                        <option value="info">INFO</option>
+                        <option value="error">ERROR</option>
+                        <option value="debug">DEBUG</option>
+                        <option value="warn">WARN</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-dark-muted text-sm mb-2">Поиск</label>
+                    <input type="text" id="searchInput" placeholder="Поиск по тексту..." class="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 transition">
+                </div>
+                <button onclick="loadLogs(1)" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    Применить
+                </button>
+            </div>
+            <div class="flex items-center justify-between mt-4 pt-4 border-t border-dark-border">
+                <div class="flex items-center gap-4 text-sm">
+                    <span class="text-dark-muted">Записей: <span id="totalCount" class="text-dark-text">0</span></span>
+                    <span class="text-dark-muted">Ошибок: <span id="errorCount" class="text-red-400">0</span></span>
+                </div>
+                <div id="refreshIndicator" class="hidden text-sm text-dark-muted flex items-center gap-2">
+                    <svg class="w-4 h-4 spinner" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Обновление...
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Lines -->
+        <div class="bg-dark-card rounded-xl border border-dark-border mb-6">
+            <div id="logsContainer" class="p-4 max-h-[500px] overflow-y-auto bg-black/20 rounded-t-xl">
+                <div class="text-dark-muted text-center py-8">Загрузка логов...</div>
+            </div>
+            <!-- Pagination -->
+            <div id="pagination" class="flex items-center justify-between p-4 border-t border-dark-border">
+                <button onclick="prevPage()" id="btnPrev" class="px-3 py-1 bg-dark-bg border border-dark-border rounded-lg hover:bg-dark-border transition disabled:opacity-50" disabled>
+                    ← Пред
+                </button>
+                <span id="pageInfo" class="text-dark-muted text-sm">Страница 1 из 1</span>
+                <button onclick="nextPage()" id="btnNext" class="px-3 py-1 bg-dark-bg border border-dark-border rounded-lg hover:bg-dark-border transition disabled:opacity-50" disabled>
+                    След →
+                </button>
+            </div>
+        </div>
+
+        <!-- Available Dates -->
+        <div class="bg-dark-card rounded-xl border border-dark-border">
+            <div class="p-4 border-b border-dark-border flex items-center justify-between">
+                <h2 class="font-semibold">Доступные логи</h2>
+                <button onclick="deleteAllLogs()" id="btnDeleteAll" class="text-sm px-3 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded-lg transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    Очистить всё
+                </button>
+            </div>
+            <div id="datesList" class="p-4">
+                <div class="text-dark-muted">Загрузка...</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-8 text-center text-dark-muted text-sm">
+            VPN Routes Dashboard v1.0 | Keenetic
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-dark-card border border-dark-border rounded-xl px-4 py-3 shadow-lg transform translate-y-20 opacity-0 transition-all duration-300">
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        // State
+        let currentPage = 1;
+        let totalPages = 1;
+        let autoRefreshInterval = null;
+        let searchTimeout = null;
+
+        // Toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMessage');
+            toastMsg.textContent = message;
+            toast.className = toast.className.replace(/translate-y-20 opacity-0/, 'translate-y-0 opacity-100');
+            if (type === 'error') {
+                toast.style.borderColor = '#ef4444';
+            } else if (type === 'success') {
+                toast.style.borderColor = '#22c55e';
+            } else {
+                toast.style.borderColor = '#334155';
+            }
+            setTimeout(() => {
+                toast.className = toast.className.replace(/translate-y-0 opacity-100/, 'translate-y-20 opacity-0');
+            }, 3000);
+        }
+
+        // Format file size
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // Format date for display
+        function formatDate(dateStr) {
+            const parts = dateStr.split('-');
+            return `${parts[2]}.${parts[1]}.${parts[0]}`;
+        }
+
+        // Get log level color class
+        function getLevelClass(level) {
+            switch (level) {
+                case 'ERROR': return 'text-red-400 bg-red-400/10';
+                case 'WARN': return 'text-yellow-400 bg-yellow-400/10';
+                case 'INFO': return 'text-blue-400';
+                case 'DEBUG': return 'text-dark-muted';
+                default: return 'text-dark-text';
+            }
+        }
+
+        // Load available dates
+        async function loadDates() {
+            try {
+                const response = await fetch('/api/logs-dates.cgi');
+                const data = await response.json();
+
+                const select = document.getElementById('selectDate');
+                const datesList = document.getElementById('datesList');
+
+                // Populate select
+                select.innerHTML = '';
+                if (data.dates.length === 0) {
+                    select.innerHTML = '<option value="">Нет логов</option>';
+                    datesList.innerHTML = '<div class="text-dark-muted">Нет доступных логов</div>';
+                    return;
+                }
+
+                data.dates.forEach((d, i) => {
+                    const option = document.createElement('option');
+                    option.value = d.date;
+                    option.textContent = formatDate(d.date) + (i === 0 ? ' (сегодня)' : '');
+                    select.appendChild(option);
+                });
+
+                // Populate dates list
+                datesList.innerHTML = data.dates.map(d => {
+                    const hasErrors = d.error_count > 0;
+                    const errorBadge = hasErrors
+                        ? `<span class="text-red-400 text-sm">⚠ ${d.error_count} ${d.error_count === 1 ? 'ошибка' : 'ошибок'}</span>`
+                        : '<span class="text-green-400 text-sm">✓ без ошибок</span>';
+                    return `
+                        <div class="flex items-center justify-between py-2 border-b border-dark-border/30 last:border-0" id="log-row-${d.date}">
+                            <div class="flex items-center gap-3">
+                                <span class="text-lg">📅</span>
+                                <span class="font-medium">${formatDate(d.date)}</span>
+                                <span class="text-dark-muted text-sm">${formatSize(d.size)}</span>
+                                <span class="text-dark-muted text-sm">${d.lines} строк</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                ${errorBadge}
+                                <button onclick="selectDate('${d.date}')" class="text-blue-400 hover:text-blue-300 text-sm">Открыть</button>
+                                <button onclick="deleteLog('${d.date}')" class="text-red-400 hover:text-red-300 text-sm">Удалить</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                showToast('Ошибка загрузки списка дат', 'error');
+            }
+        }
+
+        // Select date and load logs
+        function selectDate(date) {
+            document.getElementById('selectDate').value = date;
+            loadLogs(1);
+        }
+
+        // Load logs
+        async function loadLogs(page = 1, silent = false) {
+            currentPage = page;
+            const date = document.getElementById('selectDate').value;
+            const level = document.getElementById('selectLevel').value;
+            const search = document.getElementById('searchInput').value;
+
+            if (!silent) {
+                document.getElementById('refreshIndicator').classList.remove('hidden');
+            }
+
+            try {
+                let url = `/api/logs.cgi?page=${page}&per_page=100`;
+                if (date) url += `&date=${date}`;
+                if (level !== 'all') url += `&level=${level}`;
+                if (search) url += `&search=${encodeURIComponent(search)}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                totalPages = data.pages || 1;
+
+                // Update counts
+                document.getElementById('totalCount').textContent = data.total;
+                document.getElementById('errorCount').textContent = data.error_count;
+
+                // Update pagination
+                document.getElementById('pageInfo').textContent = `Страница ${data.page} из ${data.pages || 1}`;
+                document.getElementById('btnPrev').disabled = data.page <= 1;
+                document.getElementById('btnNext').disabled = data.page >= (data.pages || 1);
+
+                // Render logs
+                const container = document.getElementById('logsContainer');
+                if (data.lines.length === 0) {
+                    container.innerHTML = '<div class="text-dark-muted text-center py-8">Нет записей</div>';
+                } else {
+                    container.innerHTML = data.lines.map(line => {
+                        const levelClass = getLevelClass(line.level);
+                        return `
+                            <div class="log-line py-1 border-b border-dark-border/20 last:border-0 flex gap-3 text-sm ${levelClass}">
+                                <span class="text-dark-muted shrink-0">${line.time}</span>
+                                <span class="shrink-0 w-14 font-semibold">[${line.level}]</span>
+                                <span class="break-all">${escapeHtml(line.message)}</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+            } catch (e) {
+                showToast('Ошибка загрузки логов', 'error');
+            }
+
+            document.getElementById('refreshIndicator').classList.add('hidden');
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Pagination
+        function prevPage() {
+            if (currentPage > 1) {
+                loadLogs(currentPage - 1);
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                loadLogs(currentPage + 1);
+            }
+        }
+
+        // Auto refresh toggle
+        function toggleAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            if (checkbox.checked) {
+                autoRefreshInterval = setInterval(() => loadLogs(currentPage, true), 5000);
+                showToast('Автообновление включено', 'info');
+            } else {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                showToast('Автообновление выключено', 'info');
+            }
+        }
+
+        // Delete log for specific date
+        async function deleteLog(date) {
+            if (!confirm(`Удалить лог за ${formatDate(date)}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/logs-delete.cgi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete_date', date: date })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Лог удалён', 'success');
+                    // Remove row from UI
+                    const row = document.getElementById(`log-row-${date}`);
+                    if (row) row.remove();
+                    // Reload dates list and logs
+                    loadDates();
+                    loadLogs(1);
+                } else {
+                    showToast(data.error || 'Ошибка удаления', 'error');
+                }
+            } catch (e) {
+                showToast('Ошибка удаления лога', 'error');
+            }
+        }
+
+        // Delete all logs
+        async function deleteAllLogs() {
+            if (!confirm('Удалить ВСЕ логи? Это действие необратимо.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/logs-delete.cgi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete_all' })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message || 'Все логи удалены', 'success');
+                    // Reload everything
+                    loadDates();
+                    loadLogs(1);
+                } else {
+                    showToast(data.error || 'Ошибка удаления', 'error');
+                }
+            } catch (e) {
+                showToast('Ошибка удаления логов', 'error');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDates().then(() => {
+                loadLogs(1);
+            });
+
+            // Auto refresh checkbox
+            document.getElementById('autoRefresh').addEventListener('change', toggleAutoRefresh);
+
+            // Search on enter
+            document.getElementById('searchInput').addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    loadLogs(1);
+                }
+            });
+
+            // Filter on change
+            document.getElementById('selectDate').addEventListener('change', () => loadLogs(1));
+            document.getElementById('selectLevel').addEventListener('change', () => loadLogs(1));
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+#!/bin/sh
+# VPN Routes - Init скрипт для Entware
+# Устанавливается в /opt/etc/init.d/S99vpn-routes
+
+SCRIPT="/opt/bin/vpn-routes.sh"
+NAME="vpn-routes"
+DESC="VPN Routes Manager"
+
+# Задержка перед запуском (секунды)
+# Даёт время для поднятия VPN-интерфейса
+STARTUP_DELAY=30
+
+start() {
+    echo "Запуск $DESC..."
+
+    if [ ! -x "$SCRIPT" ]; then
+        echo "ОШИБКА: Скрипт не найден или не исполняемый: $SCRIPT"
+        return 1
+    fi
+
+    # Задержка для ожидания VPN
+    if [ "$STARTUP_DELAY" -gt 0 ]; then
+        echo "Ожидание $STARTUP_DELAY сек (для инициализации VPN)..."
+        sleep "$STARTUP_DELAY"
+    fi
+
+    "$SCRIPT" start
+    return $?
+}
+
+stop() {
+    echo "Остановка $DESC..."
+
+    if [ ! -x "$SCRIPT" ]; then
+        echo "ОШИБКА: Скрипт не найден: $SCRIPT"
+        return 1
+    fi
+
+    "$SCRIPT" stop
+    return $?
+}
+
+restart() {
+    stop
+    sleep 2
+    start
+}
+
+status() {
+    if [ ! -x "$SCRIPT" ]; then
+        echo "ОШИБКА: Скрипт не найден: $SCRIPT"
+        return 1
+    fi
+
+    "$SCRIPT" status
+    return $?
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Использование: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit $?
