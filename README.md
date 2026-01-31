@@ -4,6 +4,10 @@
 
 Автоматически направляет трафик к выбранным сервисам (WhatsApp, Telegram и др.) через VPN-интерфейс, используя ipset + policy routing. Остальной трафик идёт напрямую.
 
+<p align="center">
+  <img src="resources/screen1.png" alt="VPN Routes Dashboard" width="800">
+</p>
+
 ## Возможности
 
 - Загрузка списков IP-адресов из внешнего источника (iplist.opencck.org)
